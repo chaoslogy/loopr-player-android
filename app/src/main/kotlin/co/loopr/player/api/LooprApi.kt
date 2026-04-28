@@ -22,50 +22,50 @@ class LooprApi(private val baseUrl: String) {
 
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
 
-    /** POST /api/v1/devices/claim-code → 201 ClaimCodeResponse */
     suspend fun requestClaimCode(req: ClaimCodeRequest): Result<ClaimCodeResponse> =
         withContext(Dispatchers.IO) {
             runCatching {
                 val body = json.encodeToString(ClaimCodeRequest.serializer(), req)
                     .toRequestBody(jsonMediaType)
-                val resp = client.newCall(
-                    Request.Builder()
-                        .url("$baseUrl/api/v1/devices/claim-code")
-                        .post(body)
-                        .build()
-                ).execute()
-                resp.use {
+                client.newCall(
+                    Request.Builder().url("$baseUrl/api/v1/devices/claim-code").post(body).build()
+                ).execute().use {
                     if (!it.isSuccessful) error("HTTP ${it.code} from claim-code")
-                    val text = it.body?.string() ?: error("empty body")
-                    json.decodeFromString(ClaimCodeResponse.serializer(), text)
+                    json.decodeFromString(ClaimCodeResponse.serializer(), it.body?.string() ?: error("empty body"))
                 }
             }
         }
 
-    /**
-     * GET /api/v1/devices/poll/{code}
-     *  - 202 → still waiting (returns null)
-     *  - 200 → claimed, returns PollResponse
-     *  - 404 → code unknown/expired → throws
-     */
     suspend fun pollClaim(code: String): Result<PollResponse?> =
         withContext(Dispatchers.IO) {
             runCatching {
-                val resp = client.newCall(
-                    Request.Builder()
-                        .url("$baseUrl/api/v1/devices/poll/${code.replace("-", "")}")
-                        .get()
-                        .build()
-                ).execute()
-                resp.use {
+                client.newCall(
+                    Request.Builder().url("$baseUrl/api/v1/devices/poll/${code.replace("-", "")}").get().build()
+                ).execute().use {
                     when (it.code) {
                         202 -> null
-                        200 -> {
-                            val text = it.body?.string() ?: error("empty body on 200 poll")
-                            json.decodeFromString(PollResponse.serializer(), text)
-                        }
+                        200 -> json.decodeFromString(PollResponse.serializer(),
+                                                     it.body?.string() ?: error("empty body on 200 poll"))
                         else -> error("HTTP ${it.code} from poll")
                     }
+                }
+            }
+        }
+
+    /** GET /api/v1/me/playlist — Authorization: Bearer <device-token>. */
+    suspend fun fetchAssignedPlaylist(deviceToken: String): Result<AssignedPlaylistView> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                client.newCall(
+                    Request.Builder()
+                        .url("$baseUrl/api/v1/me/playlist")
+                        .addHeader("Authorization", "Bearer $deviceToken")
+                        .get()
+                        .build()
+                ).execute().use {
+                    if (!it.isSuccessful) error("HTTP ${it.code} from /me/playlist")
+                    json.decodeFromString(AssignedPlaylistView.serializer(),
+                                           it.body?.string() ?: error("empty body on /me/playlist"))
                 }
             }
         }

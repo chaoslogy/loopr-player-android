@@ -17,16 +17,50 @@ data class ClaimCodeResponse(
     val pollIntervalSeconds: Long,
 )
 
-/**
- * Returned by GET /api/v1/devices/poll/{code} when the dashboard has claimed the code.
- * The 202 (waiting) and 404 (expired/unknown) cases are conveyed through HTTP status,
- * and the client deserialises this DTO only on 200.
- */
 @Serializable
 data class PollResponse(
     val screenId: Long,
     val workspaceId: Long,
     val screenName: String,
-    val deviceToken: String,    // raw token; persisted to DataStore
+    val deviceToken: String,
     val pairedAt: String,
 )
+
+@Serializable
+data class AssignedPlaylistView(
+    val screen: ScreenIdentity,
+    val playlist: Playlist? = null,
+) {
+    @Serializable
+    data class ScreenIdentity(
+        val id: Long,
+        val workspaceId: Long,
+        val name: String,
+        val currentPlaylistId: String? = null,
+    )
+
+    @Serializable
+    data class Playlist(
+        val id: Long,
+        val name: String,
+        val items: List<Item>,
+    ) {
+        @Serializable
+        data class Item(
+            val id: Long,
+            val position: Int,
+            val kind: String,                 // "media" | "widget"
+            val durationSeconds: Int,
+            val transition: String,
+            val widget: Widget? = null,
+        )
+
+        @Serializable
+        data class Widget(
+            val id: Long,
+            val kind: String,                 // "web_url", "youtube", etc.
+            val name: String,
+            val configJson: String,
+        )
+    }
+}
