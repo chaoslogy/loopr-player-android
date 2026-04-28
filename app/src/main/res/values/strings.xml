@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Loopr</string>
+    <string name="pairing_title">Pair this TV</string>
+    <string name="pairing_subtitle">Visit %1$s and enter:</string>
+    <string name="pairing_waiting">Waiting for someone to enter the code…</string>
+    <string name="pairing_offline">No connection. Please check Wi-Fi.</string>
+    <string name="connected_title">Connected</string>
+    <string name="connected_subtitle">%1$s is paired. Waiting for content.</string>
+</resources>
