@@ -17,7 +17,7 @@ android {
         versionName = "0.1.0"
 
         // Read at runtime via BuildConfig
-        buildConfigField("String", "API_BASE_URL", "\"https://api.loopr.studio\"")
+        buildConfigField("String", "API_BASE_URL", "\"https://api-staging.loopr.studio\"")
         buildConfigField("String", "PAIR_URL",     "\"loopr.studio\"")
     }
 

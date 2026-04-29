@@ -76,7 +76,7 @@ The TV will display a 6-character code. On a phone or laptop, sign in to `app.lo
 
 ## Configuration
 
-`API_BASE_URL` is baked into `BuildConfig` from `app/build.gradle.kts`. To point at staging, change to `https://staging.api.loopr.studio` and rebuild.
+`API_BASE_URL` is baked into `BuildConfig` from `app/build.gradle.kts`. To point at staging, change to `https://api-staging.loopr.studio` and rebuild.
 
 ## Roadmap
 
