@@ -18,7 +18,7 @@ android {
 
         // Read at runtime via BuildConfig
         buildConfigField("String", "API_BASE_URL", "\"https://api-staging.loopr.studio\"")
-        buildConfigField("String", "PAIR_URL",     "\"loopr.studio\"")
+        buildConfigField("String", "PAIR_URL",     "\"app-staging.loopr.studio\"")
     }
 
     buildTypes {
