@@ -22,7 +22,7 @@ sealed interface PairingState {
 }
 
 class PairingViewModel(app: Application) : AndroidViewModel(app) {
-    private val app = app as LooprApp
+    private val looprApp = app as LooprApp
     private val _state = MutableStateFlow<PairingState>(PairingState.RequestingCode)
     val state: StateFlow<PairingState> = _state.asStateFlow()
 
@@ -32,7 +32,7 @@ class PairingViewModel(app: Application) : AndroidViewModel(app) {
 
     fun retry() = startFlow()
 
-    private fun startFlow() = viewModelScope.launch {
+    private fun startFlow(): kotlinx.coroutines.Job = viewModelScope.launch {
         _state.update { PairingState.RequestingCode }
 
         val req = ClaimCodeRequest(
@@ -41,7 +41,7 @@ class PairingViewModel(app: Application) : AndroidViewModel(app) {
             appVersion = BuildConfig.VERSION_NAME,
         )
 
-        val result = app.api.requestClaimCode(req)
+        val result = looprApp.api.requestClaimCode(req)
         if (result.isFailure) {
             val err = result.exceptionOrNull()
             _state.update { PairingState.NetworkError(err?.message ?: "couldn't reach api.loopr.studio") }
@@ -58,7 +58,7 @@ class PairingViewModel(app: Application) : AndroidViewModel(app) {
         val intervalMs = (resp.pollIntervalSeconds.coerceAtLeast(2)) * 1000L
         while (true) {
             delay(intervalMs)
-            val pollResult = app.api.pollClaim(rawCode)
+            val pollResult = looprApp.api.pollClaim(rawCode)
             if (pollResult.isFailure) {
                 // 404 = code expired/unknown → request a fresh one
                 _state.update { PairingState.RequestingCode }
@@ -67,7 +67,7 @@ class PairingViewModel(app: Application) : AndroidViewModel(app) {
             }
             val poll = pollResult.getOrNull()
             if (poll != null) {
-                app.deviceStore.store(
+                looprApp.deviceStore.store(
                     token = poll.deviceToken,
                     screenId = poll.screenId,
                     workspaceId = poll.workspaceId,

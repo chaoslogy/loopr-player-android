@@ -32,11 +32,11 @@ sealed interface PlayerState {
 }
 
 class PlayerViewModel(app: Application) : AndroidViewModel(app) {
-    private val app = app as LooprApp
+    private val looprApp = app as LooprApp
     private val _state = MutableStateFlow<PlayerState>(PlayerState.Loading)
     val state: StateFlow<PlayerState> = _state.asStateFlow()
 
-    private val identityFlow = app.deviceStore.identity
+    private val identityFlow = looprApp.deviceStore.identity
 
     private val overlaysJson = Json { ignoreUnknownKeys = true; isLenient = true }
 
@@ -59,7 +59,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     private suspend fun runFetchLoop() {
         while (true) {
             val identity: DeviceStore.Identity = identityFlow.first { it != null }!!
-            val result = app.api.fetchAssignedPlaylist(identity.deviceToken)
+            val result = looprApp.api.fetchAssignedPlaylist(identity.deviceToken)
             result.onSuccess { view ->
                 val clock = extractClock(view.screen.overlays)
                 if (view.playlist == null || view.playlist.items.isEmpty()) {
