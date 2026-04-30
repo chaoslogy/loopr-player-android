@@ -36,7 +36,7 @@ class PairingViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { PairingState.RequestingCode }
 
         val req = ClaimCodeRequest(
-            deviceFingerprint = DeviceFingerprint.get(app),
+            deviceFingerprint = DeviceFingerprint.get(looprApp),
             hardwareModel = DeviceFingerprint.hardwareModel(),
             appVersion = BuildConfig.VERSION_NAME,
         )
