@@ -1,6 +1,7 @@
 package co.loopr.player.api
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 
 @Serializable
 data class ClaimCodeRequest(
@@ -37,6 +38,8 @@ data class AssignedPlaylistView(
         val workspaceId: Long,
         val name: String,
         val currentPlaylistId: String? = null,
+        // Free-form JSON: { "clock": {...}, "weather": {...} }. Player parses what it knows.
+        val overlays: JsonElement? = null,
     )
 
     @Serializable
@@ -65,25 +68,15 @@ data class AssignedPlaylistView(
     }
 }
 
-
+/**
+ * Typed view of the "clock" overlay subtree. Built lazily off [AssignedPlaylistView.ScreenIdentity.overlays]
+ * so unknown overlay kinds don't break deserialization.
+ */
 @Serializable
-data class UrlSessionCredentials(
-    val sessionId: Long,
-    val targetUrl: String,
-    val cookieDomain: String? = null,
-    val cookies: List<Cookie> = emptyList(),
-    val localStorage: kotlinx.serialization.json.JsonElement? = null,
-    val sessionStorage: kotlinx.serialization.json.JsonElement? = null,
-) {
-    @Serializable
-    data class Cookie(
-        val name: String,
-        val value: String,
-        val domain: String? = null,
-        val path: String = "/",
-        val expires: Long? = null,
-        val httpOnly: Boolean = false,
-        val secure: Boolean = true,
-        val sameSite: String = "Lax",
-    )
-}
+data class ClockOverlay(
+    val enabled: Boolean = false,
+    val format: String = "12h",        // "12h" | "24h"
+    val theme: String = "light",       // "light" | "dark"
+    val opacity: Float = 0.95f,        // 0..1
+    val position: String = "bottom-right" // "top-left" | "top-right" | "bottom-left" | "bottom-right"
+)

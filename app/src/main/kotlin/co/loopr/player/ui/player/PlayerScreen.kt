@@ -24,7 +24,15 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import co.loopr.player.LooprApp
 import co.loopr.player.api.AssignedPlaylistView
 import co.loopr.player.api.ClockOverlay
-import co.loopr.player.api.UrlSessionCredentials
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
+import kotlinx.coroutines.delay
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 import co.loopr.player.ui.theme.*
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
@@ -39,10 +47,10 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel()) {
     val state by vm.state.collectAsState()
     Box(Modifier.fillMaxSize()) {
         when (val s = state) {
-            is PlayerState.Loading -> Loading()
-            is PlayerState.Idle    -> Idle(s.screenName)
-            is PlayerState.Playing -> Playing(s)
-            is PlayerState.Error   -> Idle("Loopr")
+            is PlayerState.Loading       -> Loading()
+            is PlayerState.Idle          -> Idle(s.screenName)
+            is PlayerState.Playing       -> Playing(s)
+            is PlayerState.Error         -> Idle("Loopr")  // graceful fallback
         }
         val clock = (state as? PlayerState.Playing)?.clock
             ?: (state as? PlayerState.Idle)?.clock
@@ -284,32 +292,52 @@ private fun resolveWidget(widget: AssignedPlaylistView.Playlist.Widget): Resolve
     ResolvedWidget(url, refresh, urlSessionId)
 }.getOrNull()
 
+
 @Composable
 private fun ClockOverlayView(clock: ClockOverlay) {
     var nowText by remember { mutableStateOf(formatNow(clock.format)) }
     LaunchedEffect(clock.format) {
         while (true) {
             nowText = formatNow(clock.format)
-            val nowMs = System.currentTimeMillis()
-            delay(1000L - (nowMs % 1000L))
+            // align to next second
+            val now = System.currentTimeMillis()
+            val msToNextSecond = 1000L - (now % 1000L)
+            delay(msToNextSecond)
         }
     }
     val align = when (clock.position) {
-        "top-left"    -> Alignment.TopStart
-        "top-right"   -> Alignment.TopEnd
-        "bottom-left" -> Alignment.BottomStart
-        else          -> Alignment.BottomEnd
+        "top-left"     -> Alignment.TopStart
+        "top-right"    -> Alignment.TopEnd
+        "bottom-left"  -> Alignment.BottomStart
+        else           -> Alignment.BottomEnd
     }
-    val (bg, fg) = if (clock.theme == "dark") Color(0xFF111111) to Color(0xFFFFFFFF)
-    else Color(0xFFFFFFFF) to Color(0xFF0F1115)
-    Box(Modifier.fillMaxSize().alpha(clock.opacity.coerceIn(0f, 1f)), contentAlignment = align) {
-        Box(Modifier.padding(40.dp).background(bg, RoundedCornerShape(20.dp)).padding(28.dp, 16.dp)) {
-            Text(nowText, color = fg, fontSize = 56.sp, fontWeight = FontWeight.Bold)
+    val (bg, fg) = if (clock.theme == "dark")
+        Color(0xFF111111) to Color(0xFFFFFFFF)
+    else
+        Color(0xFFFFFFFF) to Color(0xFF0F1115)
+    Box(
+        Modifier.fillMaxSize().alpha(clock.opacity.coerceIn(0f, 1f)),
+        contentAlignment = align,
+    ) {
+        Box(
+            Modifier
+                .padding(40.dp)
+                .background(bg, RoundedCornerShape(20.dp))
+                .padding(horizontal = 28.dp, vertical = 16.dp),
+        ) {
+            Text(
+                nowText,
+                color = fg,
+                fontSize = 56.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Default,
+            )
         }
     }
 }
 
 private fun formatNow(format: String): String {
     val pattern = if (format == "24h") "HH:mm" else "h:mma"
-    return LocalTime.now().format(DateTimeFormatter.ofPattern(pattern)).lowercase()
+    return LocalTime.now().format(DateTimeFormatter.ofPattern(pattern))
+        .lowercase() // 3:43am style like juuno
 }
