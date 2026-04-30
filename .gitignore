@@ -17,4 +17,3 @@ local.properties
 /app/release
 *.keystore
 keystore.properties
-gradle/wrapper/gradle-wrapper.jar
