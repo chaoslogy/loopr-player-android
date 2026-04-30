@@ -3,6 +3,8 @@ package co.loopr.player.ui.player
 import android.annotation.SuppressLint
 import android.view.ViewGroup
 import android.webkit.CookieManager
+import android.webkit.WebChromeClient
+import android.webkit.WebViewClient
 import android.webkit.WebSettings
 import android.webkit.WebView
 import androidx.compose.foundation.background
@@ -164,6 +166,15 @@ private fun WebSlot(resolved: ResolvedWidget, key: String, deviceToken: String?)
                         loadWithOverviewMode = true
                         useWideViewPort = true
                         cacheMode = WebSettings.LOAD_DEFAULT
+                        userAgentString = userAgentString + " LooprPlayer/1.0"
+                    }
+                    // *** Critical *** without these, every URL navigation gets delegated
+                    // to the system browser. On Fire TV that's Silk, not us.
+                    webViewClient = WebViewClient()
+                    webChromeClient = WebChromeClient()
+                    CookieManager.getInstance().apply {
+                        setAcceptCookie(true)
+                        setAcceptThirdPartyCookies(this@apply, true)
                     }
                     setBackgroundColor(0xFF000000.toInt())
                     tag = "init"
