@@ -80,3 +80,25 @@ data class ClockOverlay(
     val opacity: Float = 0.95f,        // 0..1
     val position: String = "bottom-right" // "top-left" | "top-right" | "bottom-left" | "bottom-right"
 )
+
+@Serializable
+data class UrlSessionCredentials(
+    val sessionId: Long,
+    val targetUrl: String,
+    val cookieDomain: String? = null,
+    val cookies: List<Cookie> = emptyList(),
+    val localStorage: kotlinx.serialization.json.JsonElement? = null,
+    val sessionStorage: kotlinx.serialization.json.JsonElement? = null,
+) {
+    @Serializable
+    data class Cookie(
+        val name: String,
+        val value: String,
+        val domain: String? = null,
+        val path: String = "/",
+        val expires: Long? = null,
+        val httpOnly: Boolean = false,
+        val secure: Boolean = true,
+        val sameSite: String = "Lax",
+    )
+}

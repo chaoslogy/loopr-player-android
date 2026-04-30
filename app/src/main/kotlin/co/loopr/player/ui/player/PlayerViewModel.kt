@@ -26,6 +26,7 @@ sealed interface PlayerState {
         val items: List<AssignedPlaylistView.Playlist.Item>,
         val cursor: Int,
         val clock: ClockOverlay? = null,
+        val deviceToken: String? = null,
     ) : PlayerState
     data class Error(val message: String) : PlayerState
 }
@@ -76,6 +77,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                             items = view.playlist.items,
                             cursor = cursor,
                             clock = clock,
+                            deviceToken = identity.deviceToken,
                         )
                     }
                 }
