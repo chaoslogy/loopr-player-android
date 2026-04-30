@@ -5,6 +5,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import co.loopr.player.LooprApp
 import co.loopr.player.api.AssignedPlaylistView
+import co.loopr.player.api.ClockOverlay
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import co.loopr.player.data.DeviceStore
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,12 +19,13 @@ import kotlinx.coroutines.launch
 
 sealed interface PlayerState {
     data object Loading : PlayerState
-    data class Idle(val screenName: String) : PlayerState
+    data class Idle(val screenName: String, val clock: ClockOverlay? = null) : PlayerState
     data class Playing(
         val screenName: String,
         val playlistName: String,
         val items: List<AssignedPlaylistView.Playlist.Item>,
         val cursor: Int,
+        val clock: ClockOverlay? = null,
     ) : PlayerState
     data class Error(val message: String) : PlayerState
 }
@@ -32,6 +36,18 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     val state: StateFlow<PlayerState> = _state.asStateFlow()
 
     private val identityFlow = app.deviceStore.identity
+
+    private val overlaysJson = Json { ignoreUnknownKeys = true; isLenient = true }
+
+    private fun extractClock(overlays: JsonElement?): ClockOverlay? {
+        if (overlays == null) return null
+        return runCatching {
+            val obj = overlays as? kotlinx.serialization.json.JsonObject ?: return null
+            val clockNode = obj["clock"] ?: return null
+            overlaysJson.decodeFromJsonElement(ClockOverlay.serializer(), clockNode)
+                .takeIf { it.enabled }
+        }.getOrNull()
+    }
 
     init {
         viewModelScope.launch { runFetchLoop() }
@@ -44,8 +60,9 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             val identity: DeviceStore.Identity = identityFlow.first { it != null }!!
             val result = app.api.fetchAssignedPlaylist(identity.deviceToken)
             result.onSuccess { view ->
+                val clock = extractClock(view.screen.overlays)
                 if (view.playlist == null || view.playlist.items.isEmpty()) {
-                    _state.update { PlayerState.Idle(identity.screenName) }
+                    _state.update { PlayerState.Idle(identity.screenName, clock) }
                 } else {
                     val current = _state.value
                     val keepCursor = current is PlayerState.Playing
@@ -58,6 +75,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                             playlistName = view.playlist.name,
                             items = view.playlist.items,
                             cursor = cursor,
+                            clock = clock,
                         )
                     }
                 }
