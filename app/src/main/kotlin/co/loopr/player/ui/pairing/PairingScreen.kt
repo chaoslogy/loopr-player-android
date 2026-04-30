@@ -6,7 +6,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -47,8 +46,7 @@ fun PairingScreen(
             .fillMaxSize()
             .background(
                 Brush.radialGradient(
-                    colors = listOf(LooprPanelLight, LooprBlack),
-                    radiusFraction = 1f
+                    colors = listOf(LooprPanelLight, LooprBlack)
                 )
             ),
         contentAlignment = Alignment.Center,
@@ -216,6 +214,4 @@ private fun Claimed() {
     }
 }
 
-// Keep MaterialTheme reference so unused-import lint stays happy
-@Suppress("unused")
-private fun touch() = MaterialTheme.colorScheme
+

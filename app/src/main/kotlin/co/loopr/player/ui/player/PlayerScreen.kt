@@ -23,24 +23,20 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
 import co.loopr.player.LooprApp
 import co.loopr.player.api.AssignedPlaylistView
+import co.loopr.player.api.UrlSessionCredentials
 import co.loopr.player.api.ClockOverlay
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.graphics.Color
 import kotlinx.coroutines.delay
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import co.loopr.player.ui.theme.*
-import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import java.time.LocalTime
-import java.time.format.DateTimeFormatter
 
 @Composable
 fun PlayerScreen(vm: PlayerViewModel = viewModel()) {

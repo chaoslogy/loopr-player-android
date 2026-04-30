@@ -42,10 +42,12 @@ class PairingViewModel(app: Application) : AndroidViewModel(app) {
         )
 
         val result = app.api.requestClaimCode(req)
-        val resp = result.getOrElse {
-            _state.update { PairingState.NetworkError(it.message ?: "couldn't reach api.loopr.studio") }
+        if (result.isFailure) {
+            val err = result.exceptionOrNull()
+            _state.update { PairingState.NetworkError(err?.message ?: "couldn't reach api.loopr.studio") }
             return@launch
         }
+        val resp = result.getOrThrow()
 
         _state.update { PairingState.ShowingCode(resp.code, resp.pairUrl) }
 
@@ -57,12 +59,13 @@ class PairingViewModel(app: Application) : AndroidViewModel(app) {
         while (true) {
             delay(intervalMs)
             val pollResult = app.api.pollClaim(rawCode)
-            val poll = pollResult.getOrElse {
+            if (pollResult.isFailure) {
                 // 404 = code expired/unknown → request a fresh one
                 _state.update { PairingState.RequestingCode }
                 startFlow()
                 return@launch
             }
+            val poll = pollResult.getOrNull()
             if (poll != null) {
                 app.deviceStore.store(
                     token = poll.deviceToken,
