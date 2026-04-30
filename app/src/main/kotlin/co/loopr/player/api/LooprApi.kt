@@ -69,4 +69,31 @@ class LooprApi(private val baseUrl: String) {
                 }
             }
         }
+
+    /**
+     * GET /api/v1/me/url-sessions/{id}/credentials — decrypted cookies + storage,
+     * device-token-authenticated. Returns null if the session is gone or expired
+     * so the player can show 'Login required'.
+     */
+    suspend fun fetchUrlSessionCredentials(deviceToken: String, sessionId: Long): Result<UrlSessionCredentials?> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                client.newCall(
+                    Request.Builder()
+                        .url("$baseUrl/api/v1/me/url-sessions/$sessionId/credentials")
+                        .addHeader("Authorization", "Bearer $deviceToken")
+                        .get()
+                        .build()
+                ).execute().use {
+                    when (it.code) {
+                        200 -> json.decodeFromString(
+                            UrlSessionCredentials.serializer(),
+                            it.body?.string() ?: error("empty body on credentials")
+                        )
+                        404, 410, 403 -> null
+                        else -> error("HTTP ${'$'}{it.code} from /me/url-sessions/$sessionId/credentials")
+                    }
+                }
+            }
+        }
 }
