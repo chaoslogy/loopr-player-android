@@ -172,10 +172,8 @@ private fun WebSlot(resolved: ResolvedWidget, key: String, deviceToken: String?)
                     // to the system browser. On Fire TV that's Silk, not us.
                     webViewClient = WebViewClient()
                     webChromeClient = WebChromeClient()
-                    CookieManager.getInstance().apply {
-                        setAcceptCookie(true)
-                        setAcceptThirdPartyCookies(this@apply, true)
-                    }
+                    CookieManager.getInstance().setAcceptCookie(true)
+                    CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
                     setBackgroundColor(0xFF000000.toInt())
                     tag = "init"
                 }
