@@ -158,7 +158,13 @@ private fun WebSlot(resolved: ResolvedWidget, key: String, deviceToken: String?)
                         loadWithOverviewMode = true
                         useWideViewPort = true
                         cacheMode = WebSettings.LOAD_DEFAULT
-                        userAgentString = userAgentString + " LooprPlayer/1.0"
+                        // Force desktop layout: sites sniff the UA + viewport. Pretending to
+                        // be desktop Chrome on Linux makes them serve the full layout (which
+                        // is also what we want on a 10-foot TV).
+                        userAgentString = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 LooprPlayer/1.0"
+                        // Wide viewport on so loadWithOverviewMode actually shrinks-to-fit.
+                        useWideViewPort = true
+                        loadWithOverviewMode = true
                     }
                     // Default 85% zoom so a typical desktop layout shows more content
                     // per TV screen. Sites can still respond to viewport meta tags.
