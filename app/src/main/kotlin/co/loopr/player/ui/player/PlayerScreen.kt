@@ -104,15 +104,7 @@ private fun Playing(state: PlayerState.Playing) {
             Idle(state.screenName)
         }
 
-        Text(
-            "${state.cursor + 1} / ${state.items.size} · ${state.playlistName}",
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(16.dp)
-                .background(LooprPanel, RoundedCornerShape(999.dp))
-                .padding(horizontal = 12.dp, vertical = 4.dp),
-            color = LooprTextMuted, fontSize = 11.sp, fontFamily = FontFamily.Monospace,
-        )
+// (status pill removed — dev affordance, not for the TV)
     }
 }
 
@@ -168,6 +160,9 @@ private fun WebSlot(resolved: ResolvedWidget, key: String, deviceToken: String?)
                         cacheMode = WebSettings.LOAD_DEFAULT
                         userAgentString = userAgentString + " LooprPlayer/1.0"
                     }
+                    // Default 85% zoom so a typical desktop layout shows more content
+                    // per TV screen. Sites can still respond to viewport meta tags.
+                    setInitialScale(85)
                     // *** Critical *** without these, every URL navigation gets delegated
                     // to the system browser. On Fire TV that's Silk, not us.
                     webViewClient = WebViewClient()
@@ -194,7 +189,7 @@ private fun WebSlot(resolved: ResolvedWidget, key: String, deviceToken: String?)
                 delay(resolved.refreshSeconds * 1000L)
                 lastLoadedAt = System.currentTimeMillis()
             }
-            CountdownPill(refreshSeconds = resolved.refreshSeconds, lastLoadedAt = lastLoadedAt, nowMs = nowMs)
+            // (CountdownPill removed — dev affordance)
         }
     }
 }
