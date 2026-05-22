@@ -84,7 +84,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             }.onFailure { e ->
                 _state.update { PlayerState.Error(e.message ?: "couldn't fetch playlist") }
             }
-            delay(30_000)
+            delay(10_000)
         }
     }
 
