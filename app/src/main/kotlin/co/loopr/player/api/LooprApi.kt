@@ -60,6 +60,7 @@ class LooprApi(private val baseUrl: String) {
                     Request.Builder()
                         .url("$baseUrl/api/v1/me/playlist")
                         .addHeader("Authorization", "Bearer $deviceToken")
+                        .addHeader("X-App-Version", co.loopr.player.BuildConfig.VERSION_NAME)
                         .get()
                         .build()
                 ).execute().use {
