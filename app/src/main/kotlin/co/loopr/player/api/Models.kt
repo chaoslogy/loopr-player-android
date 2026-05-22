@@ -56,6 +56,7 @@ data class AssignedPlaylistView(
             val durationSeconds: Int,
             val transition: String,
             val widget: Widget? = null,
+            val media:  Media?  = null,       // populated when kind="media"
         )
 
         @Serializable
@@ -64,6 +65,19 @@ data class AssignedPlaylistView(
             val kind: String,                 // "web_url", "youtube", etc.
             val name: String,
             val configJson: String,
+        )
+
+        @Serializable
+        data class Media(
+            val id: Long,
+            val kind: String,                 // "image" | "video" | "gif"
+            val name: String,
+            val contentType: String? = null,
+            val byteSize: Long? = null,
+            val width: Int? = null,
+            val height: Int? = null,
+            val durationMs: Int? = null,
+            val publicUrl: String,            // directly fetchable, no auth
         )
     }
 }

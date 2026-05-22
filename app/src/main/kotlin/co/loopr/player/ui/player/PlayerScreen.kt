@@ -90,21 +90,74 @@ private fun Idle(screenName: String) {
 @Composable
 private fun Playing(state: PlayerState.Playing) {
     val item = state.items.getOrNull(state.cursor.coerceIn(0, state.items.size - 1)) ?: return
-    val widget = item.widget
-    val resolved = widget?.let { resolveWidget(it) }
 
     Box(Modifier.fillMaxSize().background(LooprBlack)) {
-        if (resolved != null) {
-            WebSlot(
-                resolved = resolved,
-                key = "${state.playlistName}#${item.position}",
-                deviceToken = state.deviceToken,
-            )
-        } else {
-            Idle(state.screenName)
+        when (item.kind) {
+            "media" -> {
+                val media = item.media
+                if (media != null) {
+                    MediaSlot(media, key = "${state.playlistName}#${item.position}")
+                } else {
+                    Idle(state.screenName)
+                }
+            }
+            "widget" -> {
+                val resolved = item.widget?.let { resolveWidget(it) }
+                if (resolved != null) {
+                    WebSlot(
+                        resolved = resolved,
+                        key = "${state.playlistName}#${item.position}",
+                        deviceToken = state.deviceToken,
+                    )
+                } else {
+                    Idle(state.screenName)
+                }
+            }
+            else -> Idle(state.screenName)
         }
+    }
+}
 
-// (status pill removed — dev affordance, not for the TV)
+/* --- media slot: image (Coil) or video (ExoPlayer) ------------------------ */
+
+@OptIn(androidx.media3.common.util.UnstableApi::class)
+@Composable
+private fun MediaSlot(media: AssignedPlaylistView.Playlist.Media, key: String) {
+    when (media.kind) {
+        "image", "gif" -> {
+            coil.compose.AsyncImage(
+                model = media.publicUrl,
+                contentDescription = media.name,
+                contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                modifier = Modifier.fillMaxSize().background(LooprBlack),
+            )
+        }
+        "video" -> {
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            val player = remember(key) {
+                androidx.media3.exoplayer.ExoPlayer.Builder(ctx).build().apply {
+                    setMediaItem(androidx.media3.common.MediaItem.fromUri(media.publicUrl))
+                    repeatMode = androidx.media3.common.Player.REPEAT_MODE_ONE
+                    playWhenReady = true
+                    prepare()
+                }
+            }
+            androidx.compose.runtime.DisposableEffect(key) {
+                onDispose { player.release() }
+            }
+            AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = { c ->
+                    androidx.media3.ui.PlayerView(c).apply {
+                        useController = false
+                        resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+                        this.player = player
+                    }
+                },
+                update = { it.player = player },
+            )
+        }
+        else -> Idle("")
     }
 }
 
