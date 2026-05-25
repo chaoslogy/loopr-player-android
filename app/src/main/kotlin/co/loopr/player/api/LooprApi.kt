@@ -1,5 +1,7 @@
 package co.loopr.player.api
 
+class DeviceUnpairedException : RuntimeException("device-token rejected by API (401)")
+
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -64,6 +66,9 @@ class LooprApi(private val baseUrl: String) {
                         .get()
                         .build()
                 ).execute().use {
+                    // 401 = screen was deleted or force-unpaired from Arthur/Studio.
+                    // Let the ViewModel clear the local identity and return to pairing.
+                    if (it.code == 401) throw DeviceUnpairedException()
                     if (!it.isSuccessful) error("HTTP ${it.code} from /me/playlist")
                     json.decodeFromString(AssignedPlaylistView.serializer(),
                                            it.body?.string() ?: error("empty body on /me/playlist"))

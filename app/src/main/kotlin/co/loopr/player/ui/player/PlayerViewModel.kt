@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import co.loopr.player.LooprApp
 import co.loopr.player.api.AssignedPlaylistView
+import co.loopr.player.api.DeviceUnpairedException
 import co.loopr.player.api.ClockOverlay
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -82,6 +83,13 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                     }
                 }
             }.onFailure { e ->
+                if (e is DeviceUnpairedException) {
+                    // Screen row is gone server-side. Wipe local identity so Root re-renders
+                    // PairingScreen, then bail out of the fetch loop (it'll suspend on
+                    // identityFlow.first until a fresh pairing completes).
+                    looprApp.deviceStore.clear()
+                    return
+                }
                 _state.update { PlayerState.Error(e.message ?: "couldn't fetch playlist") }
             }
             delay(10_000)
