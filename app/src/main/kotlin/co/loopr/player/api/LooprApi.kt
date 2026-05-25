@@ -1,7 +1,5 @@
 package co.loopr.player.api
 
-class DeviceUnpairedException : RuntimeException("device-token rejected by API (401)")
-
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -10,6 +8,8 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.TimeUnit
+
+class DeviceUnpairedException : RuntimeException("device-token rejected by API (401)")
 
 class LooprApi(private val baseUrl: String) {
     private val client = OkHttpClient.Builder()
