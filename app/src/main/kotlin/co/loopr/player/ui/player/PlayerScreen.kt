@@ -47,7 +47,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel()) {
         when (val s = state) {
             is PlayerState.Loading       -> Loading()
             is PlayerState.Idle          -> Idle(s.screenName)
-            is PlayerState.Playing       -> Playing(s)
+            is PlayerState.Playing       -> Playing(s, onMediaEnded = { vm.advanceCursor() })
             is PlayerState.Error         -> Idle("Loopr")  // graceful fallback
         }
         val clock = (state as? PlayerState.Playing)?.clock
@@ -88,7 +88,7 @@ private fun Idle(screenName: String) {
 }
 
 @Composable
-private fun Playing(state: PlayerState.Playing) {
+private fun Playing(state: PlayerState.Playing, onMediaEnded: () -> Unit) {
     val item = state.items.getOrNull(state.cursor.coerceIn(0, state.items.size - 1)) ?: return
 
     Box(Modifier.fillMaxSize().background(LooprBlack)) {
@@ -96,7 +96,7 @@ private fun Playing(state: PlayerState.Playing) {
             "media" -> {
                 val media = item.media
                 if (media != null) {
-                    MediaSlot(media, key = "${state.playlistName}#${item.position}")
+                    MediaSlot(media, key = "${state.playlistName}#${item.position}", onEnded = onMediaEnded)
                 } else {
                     Idle(state.screenName)
                 }
@@ -122,7 +122,11 @@ private fun Playing(state: PlayerState.Playing) {
 
 @OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
-private fun MediaSlot(media: AssignedPlaylistView.Playlist.Media, key: String) {
+private fun MediaSlot(
+    media: AssignedPlaylistView.Playlist.Media,
+    key: String,
+    onEnded: () -> Unit,
+) {
     when (media.kind) {
         "image", "gif" -> {
             coil.compose.AsyncImage(
@@ -134,11 +138,22 @@ private fun MediaSlot(media: AssignedPlaylistView.Playlist.Media, key: String) {
         }
         "video" -> {
             val ctx = androidx.compose.ui.platform.LocalContext.current
+            // Capture the latest onEnded so listener never fires a stale closure.
+            val latestOnEnded by androidx.compose.runtime.rememberUpdatedState(onEnded)
             val player = remember(key) {
                 androidx.media3.exoplayer.ExoPlayer.Builder(ctx).build().apply {
                     setMediaItem(androidx.media3.common.MediaItem.fromUri(media.publicUrl))
-                    repeatMode = androidx.media3.common.Player.REPEAT_MODE_ONE
+                    // Single playthrough — playlist cursor advances on STATE_ENDED below.
+                    // Falling back to OFF (not REPEAT_MODE_ONE) so a long video doesn't loop while we wait.
+                    repeatMode = androidx.media3.common.Player.REPEAT_MODE_OFF
                     playWhenReady = true
+                    addListener(object : androidx.media3.common.Player.Listener {
+                        override fun onPlaybackStateChanged(state: Int) {
+                            if (state == androidx.media3.common.Player.STATE_ENDED) {
+                                latestOnEnded()
+                            }
+                        }
+                    })
                     prepare()
                 }
             }

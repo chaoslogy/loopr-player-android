@@ -88,21 +88,44 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Tick the slide cursor based on the active item's durationSeconds. */
+    /**
+     * Tick the slide cursor based on the active item's durationSeconds.
+     *
+     * For images / gifs: advance after `durationSeconds`.
+     * For videos:        do NOT advance on a timer — wait for ExoPlayer to fire
+     *                    STATE_ENDED, which calls [advanceCursor]. A 7 MB video
+     *                    on Fire TV Wi-Fi can easily exceed a short timer like
+     *                    12 s, leaving the screen black through the entire slot.
+     */
     private suspend fun runCursorLoop() {
         while (true) {
             val current = _state.value
             if (current is PlayerState.Playing && current.items.isNotEmpty()) {
                 val item = current.items[current.cursor.coerceIn(0, current.items.size - 1)]
-                delay(item.durationSeconds.coerceAtLeast(2) * 1000L)
-                _state.update {
-                    if (it is PlayerState.Playing && it.items.isNotEmpty()) {
-                        it.copy(cursor = (it.cursor + 1) % it.items.size)
-                    } else it
+                val isVideo = item.kind == "media" && item.media?.kind == "video"
+                if (isVideo) {
+                    // No timer-based advance for videos — STATE_ENDED drives it.
+                    // Just sleep briefly and re-check (e.g. in case the playlist changed).
+                    delay(1000)
+                } else {
+                    delay(item.durationSeconds.coerceAtLeast(2) * 1000L)
+                    advanceCursor()
                 }
             } else {
                 delay(1000)
             }
+        }
+    }
+
+    /**
+     * Move to the next playlist item. Idempotent if the playlist changed under
+     * us (the listener may fire after a refresh swapped items out).
+     */
+    fun advanceCursor() {
+        _state.update {
+            if (it is PlayerState.Playing && it.items.isNotEmpty()) {
+                it.copy(cursor = (it.cursor + 1) % it.items.size)
+            } else it
         }
     }
 }
