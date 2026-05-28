@@ -102,15 +102,33 @@ private fun Playing(state: PlayerState.Playing, onMediaEnded: () -> Unit) {
                 }
             }
             "widget" -> {
-                val resolved = item.widget?.let { resolveWidget(it) }
-                if (resolved != null) {
-                    WebSlot(
-                        resolved = resolved,
-                        key = "${state.playlistName}#${item.position}",
-                        deviceToken = state.deviceToken,
-                    )
-                } else {
-                    Idle(state.screenName)
+                val widget = item.widget
+                when {
+                    widget == null -> Idle(state.screenName)
+                    widget.kind == "split" -> {
+                        val split = resolveSplit(widget)
+                        if (split != null) {
+                            SplitSlot(
+                                split = split,
+                                keyBase = "${state.playlistName}#${item.position}",
+                                deviceToken = state.deviceToken,
+                            )
+                        } else {
+                            Idle(state.screenName)
+                        }
+                    }
+                    else -> {
+                        val resolved = resolveWidget(widget)
+                        if (resolved != null) {
+                            WebSlot(
+                                resolved = resolved,
+                                key = "${state.playlistName}#${item.position}",
+                                deviceToken = state.deviceToken,
+                            )
+                        } else {
+                            Idle(state.screenName)
+                        }
+                    }
                 }
             }
             else -> Idle(state.screenName)
@@ -366,6 +384,77 @@ private fun resolveWidget(widget: AssignedPlaylistView.Playlist.Widget): Resolve
     ResolvedWidget(url, refresh, urlSessionId)
 }.getOrNull()
 
+
+
+/* --- split slot: 2-up or 2x2 grid of WebSlots --------------------------- */
+
+private enum class SplitLayout { TwoUp, TwoByTwo }
+
+private data class ResolvedSplit(
+    val layout: SplitLayout,
+    val panels: List<ResolvedWidget>,   // exactly 2 for TwoUp, exactly 4 for TwoByTwo
+)
+
+private fun resolveSplit(widget: AssignedPlaylistView.Playlist.Widget): ResolvedSplit? = runCatching {
+    val cfg: JsonObject = widgetJson.parseToJsonElement(widget.configJson).jsonObject
+    val layout = when (cfg["layout"]?.jsonPrimitive?.content) {
+        "2x2" -> SplitLayout.TwoByTwo
+        else  -> SplitLayout.TwoUp     // default = side-by-side
+    }
+    val want = if (layout == SplitLayout.TwoByTwo) 4 else 2
+    val panelArr = cfg["panels"]?.let { it as? kotlinx.serialization.json.JsonArray } ?: return null
+    val panels = panelArr.mapNotNull { e ->
+        val o = (e as? JsonObject) ?: return@mapNotNull null
+        val url = o["url"]?.jsonPrimitive?.content ?: return@mapNotNull null
+        val refresh = o["refreshSeconds"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+        val sid = o["urlSessionId"]?.jsonPrimitive?.content?.toLongOrNull()
+        ResolvedWidget(url, refresh, sid)
+    }
+    if (panels.size < want) return null
+    ResolvedSplit(layout, panels.take(want))
+}.getOrNull()
+
+@Composable
+private fun SplitSlot(split: ResolvedSplit, keyBase: String, deviceToken: String?) {
+    when (split.layout) {
+        SplitLayout.TwoUp -> {
+            androidx.compose.foundation.layout.Row(
+                modifier = Modifier.fillMaxSize().background(LooprBlack),
+            ) {
+                split.panels.forEachIndexed { i, panel ->
+                    Box(modifier = Modifier.fillMaxHeight().weight(1f)) {
+                        WebSlot(
+                            resolved = panel,
+                            key = "$keyBase#p$i",
+                            deviceToken = deviceToken,
+                        )
+                    }
+                }
+            }
+        }
+        SplitLayout.TwoByTwo -> {
+            androidx.compose.foundation.layout.Column(
+                modifier = Modifier.fillMaxSize().background(LooprBlack),
+            ) {
+                listOf(0 to 1, 2 to 3).forEach { (l, r) ->
+                    androidx.compose.foundation.layout.Row(
+                        modifier = Modifier.fillMaxWidth().weight(1f),
+                    ) {
+                        listOf(l, r).forEach { idx ->
+                            Box(modifier = Modifier.fillMaxHeight().weight(1f)) {
+                                WebSlot(
+                                    resolved = split.panels[idx],
+                                    key = "$keyBase#p$idx",
+                                    deviceToken = deviceToken,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 @Composable
 private fun ClockOverlayView(clock: ClockOverlay) {
