@@ -13,8 +13,8 @@ android {
         applicationId = "co.loopr.player"
         minSdk = 22                       // Fire TV Stick 2nd gen
         targetSdk = 35
-        versionCode = 5
-        versionName = "0.1.4"
+        versionCode = 6
+        versionName = "0.1.5"
 
         // Read at runtime via BuildConfig
         buildConfigField("String", "API_BASE_URL", "\"https://api-staging.loopr.studio\"")

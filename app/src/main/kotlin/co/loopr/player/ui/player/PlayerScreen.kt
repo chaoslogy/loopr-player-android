@@ -247,7 +247,7 @@ private fun WebSlot(resolved: ResolvedWidget, key: String, deviceToken: String?)
                         // Force desktop layout: sites sniff the UA + viewport. Pretending to
                         // be desktop Chrome on Linux makes them serve the full layout (which
                         // is also what we want on a 10-foot TV).
-                        userAgentString = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 LooprPlayer/1.0"
+                        userAgentString = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
                         // Wide viewport on so loadWithOverviewMode actually shrinks-to-fit.
                         useWideViewPort = true
                         loadWithOverviewMode = true
@@ -257,7 +257,29 @@ private fun WebSlot(resolved: ResolvedWidget, key: String, deviceToken: String?)
                     setInitialScale(85)
                     // *** Critical *** without these, every URL navigation gets delegated
                     // to the system browser. On Fire TV that's Silk, not us.
-                    webViewClient = WebViewClient()
+                    webViewClient = object : WebViewClient() {
+                        override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
+                            super.onPageStarted(view, url, favicon)
+                            // Inject (or upgrade) a viewport meta so the page lays out
+                            // at 1600 CSS px regardless of the WebView's pixel width.
+                            // The WebView will scale the 1600-px layout down to fit the
+                            // actual panel — which keeps the desktop chrome that
+                            // testers see on their laptops.
+                            view.evaluateJavascript(
+                                "(function(){var c='width=1600,initial-scale=1';var m=document.querySelector('meta[name=\"viewport\"]');if(m){m.setAttribute('content',c);}else{var n=document.createElement('meta');n.setAttribute('name','viewport');n.setAttribute('content',c);(document.head||document.documentElement).appendChild(n);}})();",
+                                null,
+                            )
+                        }
+                        override fun onPageFinished(view: WebView, url: String) {
+                            super.onPageFinished(view, url)
+                            // Re-apply after the page's own JS runs (some SPAs replace
+                            // the viewport meta on hydrate).
+                            view.evaluateJavascript(
+                                "(function(){var c='width=1600,initial-scale=1';var m=document.querySelector('meta[name=\"viewport\"]');if(m){m.setAttribute('content',c);}else{var n=document.createElement('meta');n.setAttribute('name','viewport');n.setAttribute('content',c);(document.head||document.documentElement).appendChild(n);}})();",
+                                null,
+                            )
+                        }
+                    }
                     webChromeClient = WebChromeClient()
                     CookieManager.getInstance().setAcceptCookie(true)
                     CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
