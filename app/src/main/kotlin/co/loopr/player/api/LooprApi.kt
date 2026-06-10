@@ -102,4 +102,26 @@ class LooprApi(private val baseUrl: String) {
                 }
             }
         }
+
+    /**
+     * GET open-meteo current conditions — keyless public API, no auth headers.
+     * Caller decides cadence (the ViewModel refreshes every 30 minutes) and
+     * keeps the last good value on failure.
+     */
+    suspend fun fetchCurrentWeather(lat: Double, lon: Double, fahrenheit: Boolean): Result<OpenMeteoCurrentResponse> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val unitParam = if (fahrenheit) "&temperature_unit=fahrenheit" else ""
+                client.newCall(
+                    Request.Builder()
+                        .url("https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon&current=temperature_2m,weather_code$unitParam")
+                        .get()
+                        .build()
+                ).execute().use {
+                    if (!it.isSuccessful) error("HTTP ${it.code} from open-meteo")
+                    json.decodeFromString(OpenMeteoCurrentResponse.serializer(),
+                                          it.body?.string() ?: error("empty body from open-meteo"))
+                }
+            }
+        }
 }

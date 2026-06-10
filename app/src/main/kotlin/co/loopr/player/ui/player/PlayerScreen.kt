@@ -7,6 +7,12 @@ import android.webkit.WebChromeClient
 import android.webkit.WebViewClient
 import android.webkit.WebSettings
 import android.webkit.WebView
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -15,8 +21,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -27,6 +36,8 @@ import co.loopr.player.LooprApp
 import co.loopr.player.api.AssignedPlaylistView
 import co.loopr.player.api.UrlSessionCredentials
 import co.loopr.player.api.ClockOverlay
+import co.loopr.player.api.TickerOverlay
+import co.loopr.player.api.WeatherOverlay
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,6 +45,7 @@ import androidx.compose.runtime.setValue
 import kotlinx.coroutines.delay
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import kotlin.math.roundToInt
 import co.loopr.player.ui.theme.*
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -43,16 +55,60 @@ import kotlinx.serialization.json.jsonPrimitive
 @Composable
 fun PlayerScreen(vm: PlayerViewModel = viewModel()) {
     val state by vm.state.collectAsState()
-    Box(Modifier.fillMaxSize()) {
-        when (val s = state) {
-            is PlayerState.Loading       -> Loading()
-            is PlayerState.Idle          -> Idle(s.screenName)
-            is PlayerState.Playing       -> Playing(s, onMediaEnded = { vm.advanceCursor() })
-            is PlayerState.Error         -> Idle("Loopr")  // graceful fallback
+    val weatherNow by vm.weather.collectAsState()
+    val orientation = (state as? PlayerState.Playing)?.orientation
+        ?: (state as? PlayerState.Idle)?.orientation
+    RotatedRoot(orientation) {
+        Box(Modifier.fillMaxSize()) {
+            when (val s = state) {
+                is PlayerState.Loading       -> Loading()
+                is PlayerState.Idle          -> Idle(s.screenName)
+                is PlayerState.Playing       -> Playing(s, onMediaEnded = { vm.advanceCursor() })
+                is PlayerState.Error         -> Idle("Loopr")  // graceful fallback
+            }
+            val clock = (state as? PlayerState.Playing)?.clock
+                ?: (state as? PlayerState.Idle)?.clock
+            val weather = (state as? PlayerState.Playing)?.weather
+                ?: (state as? PlayerState.Idle)?.weather
+            val ticker = (state as? PlayerState.Playing)?.ticker
+                ?: (state as? PlayerState.Idle)?.ticker
+            CornerOverlays(clock, weather, weatherNow)
+            if (ticker != null && ticker.enabled && ticker.text.isNotBlank()) TickerOverlayView(ticker)
         }
-        val clock = (state as? PlayerState.Playing)?.clock
-            ?: (state as? PlayerState.Idle)?.clock
-        if (clock != null && clock.enabled) ClockOverlayView(clock)
+    }
+}
+
+/* --- orientation: rotate the whole content tree for portrait mounts ------- */
+
+/**
+ * Fire TV panels are physically landscape (e.g. 1920x1080); portrait signage is
+ * the same panel mounted rotated 90 degrees. We don't rotate the activity —
+ * we compose the UI at the swapped size (1080x1920 via requiredSize), centred
+ * on the landscape surface, then spin it around its centre with graphicsLayer.
+ * A WxH rect rotated 90/270 degrees about its centre occupies HxW, so the
+ * rotated composition maps exactly onto the physical screen. Overlays live
+ * inside the rotated root, so they inherit the rotation for free.
+ */
+@Composable
+private fun RotatedRoot(orientation: String?, content: @Composable () -> Unit) {
+    val angle = when (orientation) {
+        "portrait"         -> 90f
+        "portrait_flipped" -> 270f
+        else               -> 0f   // "landscape", null, or anything unknown
+    }
+    if (angle == 0f) {
+        Box(Modifier.fillMaxSize()) { content() }
+    } else {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val screenW = maxWidth
+            val screenH = maxHeight
+            Box(
+                Modifier
+                    .align(Alignment.Center)
+                    .requiredSize(width = screenH, height = screenW)
+                    .graphicsLayer { rotationZ = angle },
+            ) { content() }
+        }
     }
 }
 
@@ -478,8 +534,55 @@ private fun SplitSlot(split: ResolvedSplit, keyBase: String, deviceToken: String
     }
 }
 
+/* --- corner overlays: clock + weather chips ------------------------------- */
+
+/** Shared light/dark chip palette — background to foreground. */
+private fun overlayColors(theme: String): Pair<Color, Color> =
+    if (theme == "dark")
+        Color(0xFF111111) to Color(0xFFFFFFFF)
+    else
+        Color(0xFFFFFFFF) to Color(0xFF0F1115)
+
+private fun normalizeCorner(position: String): String = when (position) {
+    "top-left", "top-right", "bottom-left" -> position
+    else -> "bottom-right"
+}
+
+private fun cornerAlignment(corner: String): Alignment = when (corner) {
+    "top-left"     -> Alignment.TopStart
+    "top-right"    -> Alignment.TopEnd
+    "bottom-left"  -> Alignment.BottomStart
+    else           -> Alignment.BottomEnd
+}
+
+/**
+ * Renders the clock + weather chips at their configured corners. Chips that
+ * share a corner stack vertically (clock above weather). The weather chip is
+ * hidden until the first successful fetch lands.
+ */
 @Composable
-private fun ClockOverlayView(clock: ClockOverlay) {
+private fun CornerOverlays(clock: ClockOverlay?, weather: WeatherOverlay?, weatherNow: WeatherNow?) {
+    listOf("top-left", "top-right", "bottom-left", "bottom-right").forEach { corner ->
+        val clockHere = clock?.takeIf { it.enabled && normalizeCorner(it.position) == corner }
+        val weatherHere = weather?.takeIf {
+            it.enabled && normalizeCorner(it.position) == corner && weatherNow != null
+        }
+        if (clockHere == null && weatherHere == null) return@forEach
+        Box(Modifier.fillMaxSize(), contentAlignment = cornerAlignment(corner)) {
+            Column(
+                modifier = Modifier.padding(40.dp),
+                horizontalAlignment = if (corner.endsWith("right")) Alignment.End else Alignment.Start,
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                if (clockHere != null) ClockChip(clockHere)
+                if (weatherHere != null && weatherNow != null) WeatherChip(weatherHere, weatherNow)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ClockChip(clock: ClockOverlay) {
     var nowText by remember { mutableStateOf(formatNow(clock.format)) }
     LaunchedEffect(clock.format) {
         while (true) {
@@ -490,33 +593,130 @@ private fun ClockOverlayView(clock: ClockOverlay) {
             delay(msToNextSecond)
         }
     }
-    val align = when (clock.position) {
-        "top-left"     -> Alignment.TopStart
-        "top-right"    -> Alignment.TopEnd
-        "bottom-left"  -> Alignment.BottomStart
-        else           -> Alignment.BottomEnd
-    }
-    val (bg, fg) = if (clock.theme == "dark")
-        Color(0xFF111111) to Color(0xFFFFFFFF)
-    else
-        Color(0xFFFFFFFF) to Color(0xFF0F1115)
+    val (bg, fg) = overlayColors(clock.theme)
     Box(
-        Modifier.fillMaxSize().alpha(clock.opacity.coerceIn(0f, 1f)),
-        contentAlignment = align,
+        Modifier
+            .alpha(clock.opacity.coerceIn(0f, 1f))
+            .background(bg, RoundedCornerShape(20.dp))
+            .padding(horizontal = 28.dp, vertical = 16.dp),
     ) {
+        Text(
+            nowText,
+            color = fg,
+            fontSize = 56.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Default,
+        )
+    }
+}
+
+@Composable
+private fun WeatherChip(weather: WeatherOverlay, now: WeatherNow) {
+    val (bg, fg) = overlayColors(weather.theme)
+    Row(
+        Modifier
+            .alpha(weather.opacity.coerceIn(0f, 1f))
+            .background(bg, RoundedCornerShape(20.dp))
+            .padding(horizontal = 28.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(weatherGlyph(now.weatherCode), fontSize = 44.sp)
+        Spacer(Modifier.width(14.dp))
+        Text(
+            "${now.temperature.roundToInt()}°",
+            color = fg,
+            fontSize = 56.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Default,
+        )
+        val label = weather.label
+        if (!label.isNullOrBlank()) {
+            Spacer(Modifier.width(14.dp))
+            Text(label, color = fg.copy(alpha = 0.65f), fontSize = 24.sp, fontWeight = FontWeight.Medium)
+        }
+    }
+}
+
+/** WMO weather_code → display glyph (open-meteo code table). */
+private fun weatherGlyph(code: Int): String = when {
+    code == 0       -> "☀"
+    code in 1..3    -> "⛅"
+    code in 45..48  -> "🌫"
+    code in 51..67  -> "🌧"
+    code in 71..77  -> "❄"
+    code in 80..82  -> "🌧"
+    code >= 95      -> "⛈"
+    else            -> "⛅"
+}
+
+/* --- ticker overlay: full-width scrolling marquee strip -------------------- */
+
+@Composable
+private fun TickerOverlayView(ticker: TickerOverlay) {
+    val (bg, fg) = overlayColors(ticker.theme)
+    val align = if (ticker.position == "top") Alignment.TopCenter else Alignment.BottomCenter
+    Box(Modifier.fillMaxSize(), contentAlignment = align) {
         Box(
             Modifier
-                .padding(40.dp)
-                .background(bg, RoundedCornerShape(20.dp))
-                .padding(horizontal = 28.dp, vertical = 16.dp),
+                .fillMaxWidth()
+                .alpha(ticker.opacity.coerceIn(0f, 1f))
+                .background(bg),
         ) {
-            Text(
-                nowText,
-                color = fg,
-                fontSize = 56.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Default,
-            )
+            TickerMarquee(ticker.text, ticker.speedSeconds, fg)
+        }
+    }
+}
+
+/**
+ * Seamless marquee: the text (plus a gap) is treated as one repeating unit.
+ * We lay out enough copies to cover the strip, then animate translationX from
+ * 0 to -unitWidth on a linear infinite loop — the wrap frame is pixel-identical
+ * to the start frame. speedSeconds = time for one full unit traverse.
+ */
+@Composable
+private fun TickerMarquee(text: String, speedSeconds: Int, fg: Color) {
+    var unitWidthPx by remember(text) { mutableIntStateOf(0) }
+    val transition = rememberInfiniteTransition(label = "ticker")
+    val progress by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = speedSeconds.coerceAtLeast(4) * 1000,
+                easing = LinearEasing,
+            ),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "tickerOffset",
+    )
+    BoxWithConstraints(Modifier.fillMaxWidth().clipToBounds()) {
+        val stripWidthPx = constraints.maxWidth
+        // Enough copies that the strip never shows a hole mid-loop.
+        val copies = if (unitWidthPx > 0) (stripWidthPx / unitWidthPx) + 2 else 2
+        Row(
+            Modifier
+                .wrapContentWidth(align = Alignment.Start, unbounded = true)
+                .graphicsLayer {
+                    translationX = if (unitWidthPx > 0) -progress * unitWidthPx else 0f
+                },
+        ) {
+            repeat(copies) { i ->
+                Row(
+                    modifier = if (i == 0) Modifier.onSizeChanged { unitWidthPx = it.width } else Modifier,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text,
+                        color = fg,
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier = Modifier.padding(vertical = 14.dp),
+                    )
+                    Spacer(Modifier.width(96.dp))
+                }
+            }
         }
     }
 }

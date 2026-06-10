@@ -1,5 +1,6 @@
 package co.loopr.player.api
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 
@@ -38,6 +39,9 @@ data class AssignedPlaylistView(
         val workspaceId: Long,
         val name: String,
         val currentPlaylistId: String? = null,
+        // "landscape" (default) | "portrait" | "portrait_flipped". Optional —
+        // older servers don't send it, in which case we stay landscape.
+        val orientation: String? = null,
         // Free-form JSON: { "clock": {...}, "weather": {...} }. Player parses what it knows.
         val overlays: JsonElement? = null,
     )
@@ -94,6 +98,47 @@ data class ClockOverlay(
     val opacity: Float = 0.95f,        // 0..1
     val position: String = "bottom-right" // "top-left" | "top-right" | "bottom-left" | "bottom-right"
 )
+
+/**
+ * Typed view of the "weather" overlay subtree. Same lenient-parse contract as [ClockOverlay].
+ * Current conditions come from open-meteo (keyless); the chip hides until the first fetch lands.
+ */
+@Serializable
+data class WeatherOverlay(
+    val enabled: Boolean = false,
+    val lat: Double = 0.0,
+    val lon: Double = 0.0,
+    val label: String? = null,         // e.g. "London", shown next to the temperature
+    val units: String = "c",           // "c" | "f"
+    val theme: String = "light",       // "light" | "dark"
+    val opacity: Float = 0.95f,        // 0..1
+    val position: String = "bottom-right" // "top-left" | "top-right" | "bottom-left" | "bottom-right"
+)
+
+/**
+ * Typed view of the "ticker" overlay subtree — a full-width scrolling text strip.
+ */
+@Serializable
+data class TickerOverlay(
+    val enabled: Boolean = false,
+    val text: String = "",
+    val position: String = "bottom",   // "top" | "bottom"
+    val theme: String = "light",       // "light" | "dark"
+    val speedSeconds: Int = 20,        // seconds for one full traverse of the text
+    val opacity: Float = 0.95f,        // 0..1
+)
+
+/** Subset of the open-meteo /v1/forecast response the player cares about. */
+@Serializable
+data class OpenMeteoCurrentResponse(
+    val current: Current? = null,
+) {
+    @Serializable
+    data class Current(
+        @SerialName("temperature_2m") val temperature2m: Double? = null,
+        @SerialName("weather_code") val weatherCode: Int? = null,
+    )
+}
 
 @Serializable
 data class UrlSessionCredentials(
