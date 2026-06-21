@@ -32,6 +32,7 @@ sealed interface PlayerState {
         val weather: WeatherOverlay? = null,
         val ticker: TickerOverlay? = null,
         val orientation: String? = null,
+        val branding: AssignedPlaylistView.ScreenIdentity.Branding? = null,
     ) : PlayerState
     data class Playing(
         val screenName: String,
@@ -104,7 +105,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                 weatherConfig.value = weatherCfg
                 if (view.playlist == null || view.playlist.items.isEmpty()) {
                     _state.update {
-                        PlayerState.Idle(identity.screenName, clock, weatherCfg, ticker, orientation)
+                        PlayerState.Idle(identity.screenName, clock, weatherCfg, ticker, orientation, view.screen.branding)
                     }
                 } else {
                     val current = _state.value

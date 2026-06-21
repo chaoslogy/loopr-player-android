@@ -44,7 +44,16 @@ data class AssignedPlaylistView(
         val orientation: String? = null,
         // Free-form JSON: { "clock": {...}, "weather": {...} }. Player parses what it knows.
         val overlays: JsonElement? = null,
-    )
+        // Own-brand styling for the idle screen (Business tier). Null on other tiers / older servers.
+        val branding: Branding? = null,
+    ) {
+        @Serializable
+        data class Branding(
+            val logoUrl: String? = null,
+            val accentColor: String? = null,
+            val brandName: String? = null,
+        )
+    }
 
     @Serializable
     data class Playlist(

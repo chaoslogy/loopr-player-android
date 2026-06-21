@@ -62,7 +62,7 @@ fun PlayerScreen(vm: PlayerViewModel = viewModel()) {
         Box(Modifier.fillMaxSize()) {
             when (val s = state) {
                 is PlayerState.Loading       -> Loading()
-                is PlayerState.Idle          -> Idle(s.screenName)
+                is PlayerState.Idle          -> Idle(s.screenName, s.branding)
                 is PlayerState.Playing       -> Playing(s, onMediaEnded = { vm.advanceCursor() })
                 is PlayerState.Error         -> Idle("Loopr")  // graceful fallback
             }
@@ -120,27 +120,73 @@ private fun Loading() {
 }
 
 @Composable
-private fun Idle(screenName: String) {
+private fun Idle(
+    screenName: String,
+    branding: AssignedPlaylistView.ScreenIdentity.Branding? = null,
+) {
+    val accent = parseHexColor(branding?.accentColor)
+    val logoUrl = branding?.logoUrl
+    val brandName = branding?.brandName
     Box(
         modifier = Modifier.fillMaxSize().background(Brush.radialGradient(listOf(LooprPanelLight, LooprBlack))),
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("✓", color = LooprEmerald, fontSize = 88.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(16.dp))
+            when {
+                !logoUrl.isNullOrBlank() -> {
+                    coil.compose.AsyncImage(
+                        model = logoUrl,
+                        contentDescription = brandName ?: "logo",
+                        modifier = Modifier.heightIn(max = 160.dp).widthIn(max = 360.dp),
+                    )
+                    Spacer(Modifier.height(24.dp))
+                }
+                !brandName.isNullOrBlank() -> {
+                    Text(brandName, color = accent ?: LooprText, fontSize = 56.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(20.dp))
+                }
+                else -> {
+                    Text("✓", color = accent ?: LooprEmerald, fontSize = 88.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(16.dp))
+                }
+            }
             Text("Connected", color = LooprText, fontSize = 40.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(12.dp))
             Text(screenName, color = LooprTextDim, fontSize = 22.sp, fontWeight = FontWeight.Medium)
-            Spacer(Modifier.height(40.dp))
+            Spacer(Modifier.height(28.dp))
+            if (accent != null) {
+                Box(Modifier.height(4.dp).width(72.dp).background(accent, RoundedCornerShape(2.dp)))
+                Spacer(Modifier.height(28.dp))
+            } else {
+                Spacer(Modifier.height(12.dp))
+            }
             Box(Modifier.background(LooprPanel, RoundedCornerShape(20.dp)).padding(28.dp, 18.dp)) {
                 Text("Assign a playlist in Loopr Studio to start playback.",
                     color = LooprTextDim, fontSize = 18.sp)
             }
         }
-        Text("Loopr",
+        Text(brandName?.takeIf { it.isNotBlank() } ?: "Loopr",
             modifier = Modifier.align(Alignment.BottomEnd).padding(40.dp),
             color = LooprTextMuted, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
     }
+}
+
+/** Parse "#RRGGBB" or "#RRGGBBAA" into a Compose Color; null if absent/invalid. */
+private fun parseHexColor(hex: String?): Color? {
+    if (hex.isNullOrBlank()) return null
+    return try {
+        val h = hex.trim().removePrefix("#")
+        when (h.length) {
+            6 -> Color(android.graphics.Color.parseColor("#$h"))
+            8 -> {
+                // input is #RRGGBBAA; android wants #AARRGGBB
+                val rr = h.substring(0, 2); val gg = h.substring(2, 4)
+                val bb = h.substring(4, 6); val aa = h.substring(6, 8)
+                Color(android.graphics.Color.parseColor("#$aa$rr$gg$bb"))
+            }
+            else -> null
+        }
+    } catch (e: Exception) { null }
 }
 
 @Composable
