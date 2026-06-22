@@ -306,7 +306,7 @@ private data class ResolvedWidget(
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
-private fun WebSlot(resolved: ResolvedWidget, key: String, deviceToken: String?) {
+private fun WebSlot(resolved: ResolvedWidget, key: String, deviceToken: String?, fitToWidth: Boolean = false) {
     val app = (androidx.compose.ui.platform.LocalContext.current.applicationContext as LooprApp)
     var creds by remember(key) { mutableStateOf<UrlSessionCredentials?>(null) }
     var loginRequired by remember(key) { mutableStateOf(false) }
@@ -354,9 +354,13 @@ private fun WebSlot(resolved: ResolvedWidget, key: String, deviceToken: String?)
                         useWideViewPort = true
                         loadWithOverviewMode = true
                     }
-                    // Default 85% zoom so a typical desktop layout shows more content
-                    // per TV screen. Sites can still respond to viewport meta tags.
-                    setInitialScale(85)
+                    // Split panels are a fraction of the screen, so let overview mode
+                    // shrink the full 1600px layout to fit the panel (scale 0 = default/
+                    // overview). Full-screen keeps an 85% zoom for denser desktop content.
+                    setInitialScale(if (fitToWidth) 0 else 85)
+                    // Split panels must NOT pin initial-scale=1 (that defeats shrink-to-fit
+                    // and crops the panel); full-screen keeps it for a 1:1 desktop look.
+                    val viewportContent = if (fitToWidth) "width=1600" else "width=1600,initial-scale=1"
                     // *** Critical *** without these, every URL navigation gets delegated
                     // to the system browser. On Fire TV that's Silk, not us.
                     webViewClient = object : WebViewClient() {
@@ -368,7 +372,7 @@ private fun WebSlot(resolved: ResolvedWidget, key: String, deviceToken: String?)
                             // actual panel — which keeps the desktop chrome that
                             // testers see on their laptops.
                             view.evaluateJavascript(
-                                "(function(){var c='width=1600,initial-scale=1';var m=document.querySelector('meta[name=\"viewport\"]');if(m){m.setAttribute('content',c);}else{var n=document.createElement('meta');n.setAttribute('name','viewport');n.setAttribute('content',c);(document.head||document.documentElement).appendChild(n);}})();",
+                                "(function(){var c='" + viewportContent + "';var m=document.querySelector('meta[name=\"viewport\"]');if(m){m.setAttribute('content',c);}else{var n=document.createElement('meta');n.setAttribute('name','viewport');n.setAttribute('content',c);(document.head||document.documentElement).appendChild(n);}})();",
                                 null,
                             )
                         }
@@ -377,7 +381,7 @@ private fun WebSlot(resolved: ResolvedWidget, key: String, deviceToken: String?)
                             // Re-apply after the page's own JS runs (some SPAs replace
                             // the viewport meta on hydrate).
                             view.evaluateJavascript(
-                                "(function(){var c='width=1600,initial-scale=1';var m=document.querySelector('meta[name=\"viewport\"]');if(m){m.setAttribute('content',c);}else{var n=document.createElement('meta');n.setAttribute('name','viewport');n.setAttribute('content',c);(document.head||document.documentElement).appendChild(n);}})();",
+                                "(function(){var c='" + viewportContent + "';var m=document.querySelector('meta[name=\"viewport\"]');if(m){m.setAttribute('content',c);}else{var n=document.createElement('meta');n.setAttribute('name','viewport');n.setAttribute('content',c);(document.head||document.documentElement).appendChild(n);}})();",
                                 null,
                             )
                         }
@@ -551,6 +555,7 @@ private fun SplitSlot(split: ResolvedSplit, keyBase: String, deviceToken: String
                             resolved = panel,
                             key = "$keyBase#p$i",
                             deviceToken = deviceToken,
+                            fitToWidth = true,
                         )
                     }
                 }
@@ -570,6 +575,7 @@ private fun SplitSlot(split: ResolvedSplit, keyBase: String, deviceToken: String
                                     resolved = split.panels[idx],
                                     key = "$keyBase#p$idx",
                                     deviceToken = deviceToken,
+                                    fitToWidth = true,
                                 )
                             }
                         }
