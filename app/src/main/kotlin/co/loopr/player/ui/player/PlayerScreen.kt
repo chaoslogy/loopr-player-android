@@ -164,6 +164,9 @@ private fun Idle(
                 Text("Assign a playlist in Loopr Studio to start playback.",
                     color = LooprTextDim, fontSize = 18.sp)
             }
+            Spacer(Modifier.height(18.dp))
+            Text("Press the ☰ MENU button on the remote to switch account.",
+                color = LooprTextMuted, fontSize = 14.sp)
         }
         Text(brandName?.takeIf { it.isNotBlank() } ?: "Loopr",
             modifier = Modifier.align(Alignment.BottomEnd).padding(40.dp),
