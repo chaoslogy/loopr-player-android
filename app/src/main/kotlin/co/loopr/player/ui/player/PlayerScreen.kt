@@ -302,7 +302,24 @@ private data class ResolvedWidget(
     val url: String,
     val refreshSeconds: Int,    // 0 = no refresh
     val urlSessionId: Long?,    // null = public URL
+    val embedHtml: String? = null,  // when set, load this HTML (with EMBED_ORIGIN base) instead of url
 )
+
+/* A stable https origin used as the WebView base URL when we host a third-party
+ * embed in a wrapper page. YouTube's /embed/ endpoint throws a configuration
+ * error (e.g. "Error 153") when loaded as a *top-level* document with no parent
+ * origin/Referer — so YouTube widgets are loaded inside this iframe host page
+ * instead, which gives the player iframe a valid origin to validate against. */
+private const val EMBED_ORIGIN = "https://app.loopr.studio"
+
+private fun youtubeHostHtml(embedUrl: String): String {
+    val src = "$embedUrl&origin=$EMBED_ORIGIN"
+    return """<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>html,body{margin:0;padding:0;width:100%;height:100%;background:#000;overflow:hidden}
+iframe{position:absolute;top:0;left:0;width:100%;height:100%;border:0}</style></head>
+<body><iframe src="$src" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe></body></html>"""
+}
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -407,7 +424,9 @@ private fun WebSlot(resolved: ResolvedWidget, key: String, deviceToken: String?,
                 if (wv.tag != expectedTag) {
                     wv.tag = expectedTag
                     creds?.let { applyCookies(it) }
-                    wv.loadUrl(resolved.url)
+                    val html = resolved.embedHtml
+                    if (html != null) wv.loadDataWithBaseURL(EMBED_ORIGIN, html, "text/html", "utf-8", null)
+                    else wv.loadUrl(resolved.url)
                 }
             },
         )
@@ -498,6 +517,7 @@ private val widgetJson = Json { ignoreUnknownKeys = true; isLenient = true }
 
 private fun resolveWidget(widget: AssignedPlaylistView.Playlist.Widget): ResolvedWidget? = runCatching {
     val cfg: JsonObject = widgetJson.parseToJsonElement(widget.configJson).jsonObject
+    var embedHtml: String? = null
     val url: String? = when (widget.kind) {
         "web_url" -> cfg["url"]?.jsonPrimitive?.content
         "youtube" -> {
@@ -505,13 +525,15 @@ private fun resolveWidget(widget: AssignedPlaylistView.Playlist.Widget): Resolve
             val videoId    = cfg["videoId"]?.jsonPrimitive?.content
             val mute       = (cfg["mute"]?.jsonPrimitive?.content ?: "true") == "true"
             val muteParam  = if (mute) "&mute=1" else ""
-            when {
+            val embedUrl = when {
                 playlistId != null ->
                     "https://www.youtube.com/embed/videoseries?list=$playlistId&autoplay=1&loop=1$muteParam&controls=0&modestbranding=1&playsinline=1&rel=0"
                 videoId != null ->
                     "https://www.youtube.com/embed/$videoId?autoplay=1&loop=1$muteParam&controls=0&modestbranding=1&playlist=$videoId&playsinline=1&rel=0"
                 else -> null
             }
+            embedUrl?.let { embedHtml = youtubeHostHtml(it) }
+            embedUrl
         }
         "canva" -> cfg["embedUrl"]?.jsonPrimitive?.content ?: cfg["url"]?.jsonPrimitive?.content
         else    -> null
@@ -519,7 +541,7 @@ private fun resolveWidget(widget: AssignedPlaylistView.Playlist.Widget): Resolve
     url ?: return null
     val refresh = cfg["refreshSeconds"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
     val urlSessionId = cfg["urlSessionId"]?.jsonPrimitive?.content?.toLongOrNull()
-    ResolvedWidget(url, refresh, urlSessionId)
+    ResolvedWidget(url, refresh, urlSessionId, embedHtml)
 }.getOrNull()
 
 
