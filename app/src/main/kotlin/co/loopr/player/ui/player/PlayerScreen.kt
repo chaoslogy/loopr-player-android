@@ -312,6 +312,7 @@ private fun WebSlot(resolved: ResolvedWidget, key: String, deviceToken: String?,
     var loginRequired by remember(key) { mutableStateOf(false) }
     var lastLoadedAt by remember(key) { mutableStateOf(System.currentTimeMillis()) }
     var nowMs by remember(key) { mutableLongStateOf(System.currentTimeMillis()) }
+    var reloadToken by remember(key) { mutableStateOf(0) }
 
     // Fetch credentials once per item if a session is configured
     LaunchedEffect(key, resolved.urlSessionId, deviceToken) {
@@ -334,6 +335,7 @@ private fun WebSlot(resolved: ResolvedWidget, key: String, deviceToken: String?,
     }
 
     Box(Modifier.fillMaxSize()) {
+        key(reloadToken) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
@@ -385,6 +387,13 @@ private fun WebSlot(resolved: ResolvedWidget, key: String, deviceToken: String?,
                                 null,
                             )
                         }
+                        override fun onRenderProcessGone(view: WebView?, detail: android.webkit.RenderProcessGoneDetail?): Boolean {
+                            // Fire TV killed this panel's WebView renderer (OOM after a long run,
+                            // common with 4 panels going for hours). Recreate the panel instead
+                            // of leaving it black.
+                            android.os.Handler(android.os.Looper.getMainLooper()).post { reloadToken++ }
+                            return true
+                        }
                     }
                     webChromeClient = WebChromeClient()
                     CookieManager.getInstance().setAcceptCookie(true)
@@ -402,6 +411,7 @@ private fun WebSlot(resolved: ResolvedWidget, key: String, deviceToken: String?,
                 }
             },
         )
+        }
 
         // Auto-refresh tick
         if (resolved.refreshSeconds > 0) {
@@ -497,9 +507,9 @@ private fun resolveWidget(widget: AssignedPlaylistView.Playlist.Widget): Resolve
             val muteParam  = if (mute) "&mute=1" else ""
             when {
                 playlistId != null ->
-                    "https://www.youtube.com/embed/videoseries?list=$playlistId&autoplay=1&loop=1$muteParam&controls=0&modestbranding=1"
+                    "https://www.youtube.com/embed/videoseries?list=$playlistId&autoplay=1&loop=1$muteParam&controls=0&modestbranding=1&playsinline=1&rel=0"
                 videoId != null ->
-                    "https://www.youtube.com/embed/$videoId?autoplay=1&loop=1$muteParam&controls=0&modestbranding=1&playlist=$videoId"
+                    "https://www.youtube.com/embed/$videoId?autoplay=1&loop=1$muteParam&controls=0&modestbranding=1&playlist=$videoId&playsinline=1&rel=0"
                 else -> null
             }
         }
