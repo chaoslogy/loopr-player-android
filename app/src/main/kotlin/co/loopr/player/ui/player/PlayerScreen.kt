@@ -288,7 +288,7 @@ private fun MediaSlot(
                 factory = { c ->
                     androidx.media3.ui.PlayerView(c).apply {
                         useController = false
-                        resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+                        resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
                         this.player = player
                     }
                 },
