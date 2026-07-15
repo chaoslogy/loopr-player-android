@@ -43,6 +43,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.coroutines.resume
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
@@ -333,6 +336,7 @@ private fun WebSlot(resolved: ResolvedWidget, key: String, deviceToken: String?,
     var lastLoadedAt by remember(key) { mutableStateOf(System.currentTimeMillis()) }
     var nowMs by remember(key) { mutableLongStateOf(System.currentTimeMillis()) }
     var reloadToken by remember(key) { mutableStateOf(0) }
+    var webViewRef by remember(key) { mutableStateOf<WebView?>(null) }
 
     // Fetch credentials once per item if a session is configured
     LaunchedEffect(key, resolved.urlSessionId, deviceToken) {
@@ -420,7 +424,7 @@ private fun WebSlot(resolved: ResolvedWidget, key: String, deviceToken: String?,
                     CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
                     setBackgroundColor(0xFF000000.toInt())
                     tag = "init"
-                }
+                }.also { webViewRef = it }
             },
             update = { wv ->
                 val expectedTag = "$key:${creds?.sessionId ?: "none"}:$lastLoadedAt"
@@ -442,6 +446,41 @@ private fun WebSlot(resolved: ResolvedWidget, key: String, deviceToken: String?,
                 lastLoadedAt = System.currentTimeMillis()
             }
             // (CountdownPill removed — dev affordance)
+        }
+
+        // Blank-page watchdog (Aparna QA 15 Jul: Meesho panel goes black mid-run).
+        // Some sites keep the renderer alive but end up with an effectively empty
+        // document after running for a while (their own JS bails), so
+        // onRenderProcessGone never fires and the panel sits black forever.
+        // Probe the DOM periodically; two consecutive empty (or unresponsive)
+        // probes -> reload the URL. Embed-hosted slots (YouTube wrapper page is
+        // just an iframe, no text/images) are exempt.
+        if (resolved.embedHtml == null) {
+            LaunchedEffect(key, reloadToken) {
+                var strikes = 0
+                delay(90_000L)  // let the first load settle before judging
+                while (true) {
+                    val wv = webViewRef
+                    val blank = if (wv == null) false else withTimeoutOrNull(5_000L) {
+                        suspendCancellableCoroutine<Boolean> { cont ->
+                            wv.evaluateJavascript(
+                                "(function(){var b=document.body;if(!b)return 'blank';" +
+                                    "var t=(b.innerText||'').replace(/\\s+/g,'').length;" +
+                                    "var i=document.images?document.images.length:0;" +
+                                    "var f=document.getElementsByTagName('iframe').length;" +
+                                    "var v=document.getElementsByTagName('video').length;" +
+                                    "return (t<30&&i<2&&f===0&&v===0)?'blank':'ok';})()",
+                            ) { res -> if (cont.isActive) cont.resume(res != null && res.contains("blank")) }
+                        }
+                    } ?: true  // renderer not answering = treat as blank
+                    strikes = if (blank) strikes + 1 else 0
+                    if (strikes >= 2) {
+                        strikes = 0
+                        lastLoadedAt = System.currentTimeMillis()  // triggers update{} to re-loadUrl
+                    }
+                    delay(45_000L)
+                }
+            }
         }
     }
 }
