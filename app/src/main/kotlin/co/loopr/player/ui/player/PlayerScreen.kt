@@ -266,6 +266,8 @@ private fun MediaSlot(
             val ctx = androidx.compose.ui.platform.LocalContext.current
             // Capture the latest onEnded so listener never fires a stale closure.
             val latestOnEnded by androidx.compose.runtime.rememberUpdatedState(onEnded)
+            // Video aspect ratio, once known (width may need the pixel AR applied).
+            var videoAr by remember(key) { mutableStateOf<Float?>(null) }
             val player = remember(key) {
                 androidx.media3.exoplayer.ExoPlayer.Builder(ctx).build().apply {
                     setMediaItem(androidx.media3.common.MediaItem.fromUri(media.publicUrl))
@@ -277,6 +279,12 @@ private fun MediaSlot(
                         override fun onPlaybackStateChanged(state: Int) {
                             if (state == androidx.media3.common.Player.STATE_ENDED) {
                                 latestOnEnded()
+                            }
+                        }
+                        override fun onVideoSizeChanged(size: androidx.media3.common.VideoSize) {
+                            if (size.height > 0 && size.width > 0) {
+                                val par = if (size.pixelWidthHeightRatio > 0f) size.pixelWidthHeightRatio else 1f
+                                videoAr = size.width * par / size.height
                             }
                         }
                     })
@@ -295,7 +303,23 @@ private fun MediaSlot(
                         this.player = player
                     }
                 },
-                update = { it.player = player },
+                update = { pv ->
+                    pv.player = player
+                    // ZOOM (fill/cover, decided 08 Jul: no black bars) crops overflow,
+                    // which butchers sources far from the screen's aspect — a portrait
+                    // phone video lost most of its frame (Aparna QA 16 Jul). Pick per
+                    // video: cover when the video is within 20% of the screen's aspect,
+                    // FIT (letterbox) when it's far off so the whole frame stays visible.
+                    val ar = videoAr
+                    pv.post {
+                        val viewAr = if (pv.height > 0) pv.width.toFloat() / pv.height else 16f / 9f
+                        pv.resizeMode =
+                            if (ar == null || kotlin.math.abs(ar - viewAr) / viewAr <= 0.2f)
+                                androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                            else
+                                androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    }
+                },
             )
         }
         else -> Idle("")
