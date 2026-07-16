@@ -16,4 +16,6 @@ local.properties
 /app/build
 /app/release
 *.keystore
+# … but the staging keystore is deliberately committed (stable signature for in-place updates)
+!app/staging.keystore
 keystore.properties

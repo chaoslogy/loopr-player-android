@@ -13,12 +13,28 @@ android {
         applicationId = "co.loopr.player"
         minSdk = 22                       // Fire TV Stick 2nd gen
         targetSdk = 35
-        versionCode = 14
-        versionName = "0.1.13"
+        versionCode = 15
+        versionName = "0.1.14"
 
         // Read at runtime via BuildConfig
         buildConfigField("String", "API_BASE_URL", "\"https://api-staging.loopr.studio\"")
         buildConfigField("String", "PAIR_URL",     "\"app-staging.loopr.studio\"")
+    }
+
+    // Stable signing for the staging channel. CI runners generate a fresh
+    // ~/.android/debug.keystore on every run, so consecutive staging builds were
+    // signed with DIFFERENT keys -> Fire TV refused in-place updates ("App not
+    // installed", Aparna QA 16 Jul). This checked-in keystore (staging only —
+    // protects nothing beyond update continuity) makes every build's signature
+    // identical so updates install over the old version and keep app data.
+    // A real release key (not in git) is still needed for any store/prod build.
+    signingConfigs {
+        create("staging") {
+            storeFile = file("staging.keystore")
+            storePassword = "android"
+            keyAlias = "looprstaging"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {
@@ -28,6 +44,7 @@ android {
         }
         debug {
             isDebuggable = true
+            signingConfig = signingConfigs.getByName("staging")
         }
     }
 
