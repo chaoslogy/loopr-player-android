@@ -361,6 +361,9 @@ private fun WebSlot(resolved: ResolvedWidget, key: String, deviceToken: String?,
     var nowMs by remember(key) { mutableLongStateOf(System.currentTimeMillis()) }
     var reloadToken by remember(key) { mutableStateOf(0) }
     var webViewRef by remember(key) { mutableStateOf<WebView?>(null) }
+    // Set when repeated watchdog reloads couldn't get real content out of the
+    // page (site blocks TV/automated browsers, e.g. Meesho's bot wall).
+    var siteUnavailable by remember(key) { mutableStateOf(false) }
 
     // Fetch credentials once per item if a session is configured
     LaunchedEffect(key, resolved.urlSessionId, deviceToken) {
@@ -379,6 +382,13 @@ private fun WebSlot(resolved: ResolvedWidget, key: String, deviceToken: String?,
 
     if (loginRequired) {
         LoginRequiredPlaceholder(resolved.url)
+        return
+    }
+
+    if (siteUnavailable) {
+        // Clear card instead of a black panel / bot-wall junk. State is per-mount,
+        // so the next playlist cycle retries the site from scratch.
+        SiteUnavailablePlaceholder(resolved.url)
         return
     }
 
@@ -482,24 +492,38 @@ private fun WebSlot(resolved: ResolvedWidget, key: String, deviceToken: String?,
         if (resolved.embedHtml == null) {
             LaunchedEffect(key, reloadToken) {
                 var strikes = 0
+                var failedReloads = 0
                 delay(90_000L)  // let the first load settle before judging
                 while (true) {
                     val wv = webViewRef
                     val blank = if (wv == null) false else withTimeoutOrNull(5_000L) {
                         suspendCancellableCoroutine<Boolean> { cont ->
                             wv.evaluateJavascript(
-                                "(function(){var b=document.body;if(!b)return 'blank';" +
+                                // 'bad' = effectively empty document OR a bot-wall/denial
+                                // page (Akamai answers Meesho with a real 'Access Denied'
+                                // document — has text, so emptiness alone won't catch it).
+                                "(function(){var b=document.body;if(!b)return 'bad';" +
                                     "var t=(b.innerText||'').replace(/\\s+/g,'').length;" +
                                     "var i=document.images?document.images.length:0;" +
                                     "var f=document.getElementsByTagName('iframe').length;" +
                                     "var v=document.getElementsByTagName('video').length;" +
-                                    "return (t<30&&i<2&&f===0&&v===0)?'blank':'ok';})()",
-                            ) { res -> if (cont.isActive) cont.resume(res != null && res.contains("blank")) }
+                                    "if(t<30&&i<2&&f===0&&v===0)return 'bad';" +
+                                    "var probe=((document.title||'')+' '+(b.innerText||'').slice(0,300)).toLowerCase();" +
+                                    "if(t<600&&/access denied|forbidden|attention required|just a moment|verify you are|are you a robot|captcha|unusual traffic|service unavailable/.test(probe))return 'bad';" +
+                                    "return 'ok';})()",
+                            ) { res -> if (cont.isActive) cont.resume(res != null && res.contains("bad")) }
                         }
-                    } ?: true  // renderer not answering = treat as blank
+                    } ?: true  // renderer not answering = treat as bad
                     strikes = if (blank) strikes + 1 else 0
                     if (strikes >= 2) {
                         strikes = 0
+                        failedReloads++
+                        if (failedReloads >= 3) {
+                            // Three reloads couldn't produce content — the site is
+                            // refusing this browser. Show the card; retry next cycle.
+                            siteUnavailable = true
+                            break
+                        }
                         lastLoadedAt = System.currentTimeMillis()  // triggers update{} to re-loadUrl
                     }
                     delay(45_000L)
@@ -532,6 +556,28 @@ private fun CountdownPill(refreshSeconds: Int, lastLoadedAt: Long, nowMs: Long) 
                 fontSize = 11.sp,
                 fontFamily = FontFamily.Monospace,
             )
+        }
+    }
+}
+
+@Composable
+private fun SiteUnavailablePlaceholder(url: String) {
+    val host = try { java.net.URI(url).host ?: url } catch (e: Exception) { url }
+    Box(
+        Modifier.fillMaxSize().background(Brush.radialGradient(listOf(Color(0xFF1A2338), LooprBlack))),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("\uD83D\uDEA7", fontSize = 80.sp)
+            Spacer(Modifier.height(20.dp))
+            Text("Can't show this site", color = LooprText, fontSize = 38.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(10.dp))
+            Text(host, color = LooprTextDim, fontSize = 16.sp)
+            Spacer(Modifier.height(24.dp))
+            Box(Modifier.background(LooprPanel, RoundedCornerShape(20.dp)).padding(28.dp, 16.dp)) {
+                Text("This website blocks TV browsers. It will be retried on the next loop.",
+                    color = LooprTextMuted, fontSize = 16.sp)
+            }
         }
     }
 }
