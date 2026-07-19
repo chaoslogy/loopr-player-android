@@ -16,9 +16,23 @@ android {
         versionCode = 17
         versionName = "0.1.16"
 
-        // Read at runtime via BuildConfig
-        buildConfigField("String", "API_BASE_URL", "\"https://api-staging.loopr.studio\"")
-        buildConfigField("String", "PAIR_URL",     "\"app-staging.loopr.studio\"")
+    }
+
+    // Environment flavors: 'staging' (testers, sideloaded, staging keystore) and
+    // 'prod' (Amazon Appstore, release keystore, api.loopr.studio).
+    flavorDimensions += "env"
+    productFlavors {
+        create("staging") {
+            dimension = "env"
+            isDefault = true
+            buildConfigField("String", "API_BASE_URL", "\"https://api-staging.loopr.studio\"")
+            buildConfigField("String", "PAIR_URL",     "\"app-staging.loopr.studio\"")
+        }
+        create("prod") {
+            dimension = "env"
+            buildConfigField("String", "API_BASE_URL", "\"https://api.loopr.studio\"")
+            buildConfigField("String", "PAIR_URL",     "\"app.loopr.studio\"")
+        }
     }
 
     // Stable signing for the staging channel. CI runners generate a fresh
@@ -35,12 +49,22 @@ android {
             keyAlias = "looprstaging"
             keyPassword = "android"
         }
+        // Store/prod signing. The keystore is NOT in git: CI decodes it from the
+        // RELEASE_KEYSTORE_B64 secret to app/release.keystore; the password comes
+        // from RELEASE_KEYSTORE_PASS. Master copy: Signage App/.secrets/keys/.
+        create("release") {
+            storeFile = file("release.keystore")
+            storePassword = System.getenv("RELEASE_KEYSTORE_PASS") ?: ""
+            keyAlias = "looprrelease"
+            keyPassword = System.getenv("RELEASE_KEYSTORE_PASS") ?: ""
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.getByName("release")
         }
         debug {
             isDebuggable = true

@@ -1,0 +1,50 @@
+name: Build prod APK (Amazon Appstore)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build release-signed prod APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Set up Gradle 8.11
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Generate gradle wrapper jar
+        run: gradle wrapper --gradle-version 8.11.1
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+      - name: Decode release keystore
+        run: echo "$RELEASE_KEYSTORE_B64" | base64 -d > app/release.keystore
+        env:
+          RELEASE_KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_B64 }}
+      - name: Build prod release APK
+        run: ./gradlew :app:assembleProdRelease --no-daemon --stacktrace
+        env:
+          RELEASE_KEYSTORE_PASS: ${{ secrets.RELEASE_KEYSTORE_PASS }}
+      - name: Locate APK
+        run: |
+          APK=$(find app/build/outputs/apk -path "*prod*" -name "*-release.apk" | head -1)
+          test -n "$APK"
+          cp "$APK" loopr-player-prod.apk
+          ls -la loopr-player-prod.apk
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: loopr-player-prod
+          path: loopr-player-prod.apk
+          retention-days: 90
