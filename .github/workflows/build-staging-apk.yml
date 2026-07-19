@@ -43,7 +43,7 @@ jobs:
       - name: Locate APK
         id: apk
         run: |
-          APK=$(find app/build/outputs/apk -name "*stagingAmazon-debug.apk" | head -1)
+          APK=$(find app/build/outputs/apk -name "*staging-amazon-debug.apk" | head -1)
           test -n "$APK"
           echo "path=$APK" >> "$GITHUB_OUTPUT"
           cp "$APK" loopr-player-staging.apk

@@ -38,7 +38,7 @@ jobs:
           RELEASE_KEYSTORE_PASS: ${{ secrets.RELEASE_KEYSTORE_PASS }}
       - name: Locate APK
         run: |
-          APK=$(find app/build/outputs/apk -path "*prodAmazon*" -name "*-release.apk" | head -1)
+          APK=$(find app/build/outputs/apk -path "*prod*amazon*" -name "*-release.apk" | head -1)
           test -n "$APK"
           cp "$APK" loopr-player-prod.apk
           ls -la loopr-player-prod.apk
