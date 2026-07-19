@@ -33,12 +33,12 @@ jobs:
         env:
           RELEASE_KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_B64 }}
       - name: Build prod release APK
-        run: ./gradlew :app:assembleProdRelease --no-daemon --stacktrace
+        run: ./gradlew :app:assembleProdAmazonRelease --no-daemon --stacktrace
         env:
           RELEASE_KEYSTORE_PASS: ${{ secrets.RELEASE_KEYSTORE_PASS }}
       - name: Locate APK
         run: |
-          APK=$(find app/build/outputs/apk -path "*prod*" -name "*-release.apk" | head -1)
+          APK=$(find app/build/outputs/apk -path "*prodAmazon*" -name "*-release.apk" | head -1)
           test -n "$APK"
           cp "$APK" loopr-player-prod.apk
           ls -la loopr-player-prod.apk

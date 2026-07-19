@@ -38,12 +38,12 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Build debug APK
-        run: ./gradlew :app:assembleStagingDebug --no-daemon --stacktrace
+        run: ./gradlew :app:assembleStagingAmazonDebug --no-daemon --stacktrace
 
       - name: Locate APK
         id: apk
         run: |
-          APK=$(find app/build/outputs/apk -name "*staging-debug.apk" | head -1)
+          APK=$(find app/build/outputs/apk -name "*stagingAmazon-debug.apk" | head -1)
           test -n "$APK"
           echo "path=$APK" >> "$GITHUB_OUTPUT"
           cp "$APK" loopr-player-staging.apk
